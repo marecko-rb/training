@@ -324,12 +324,12 @@ window._firebaseLoadError = false;
         <div class="player-stats">6'2" · 190 lbs · Surfer / BV</div>
         <div class="workouts-count" id="count-h">0</div>
         <div class="workouts-label">Workouts this month</div>
-        <div class="balance-tag balance-zero" id="balance-h">$0 balance</div>
+        <div class="balance-tag balance-zero" id="balance-h">On track</div>
         <div id="btn-area-h"><button class="log-btn" onclick="openLogModal('h')">✓ Log Marek's Workout</button></div>
       </div>
       <div class="vs-box">
         <div class="vs-text">VS</div>
-        <div class="kitty-box"><div class="kitty-amount" id="kitty-amt">$0</div><div class="kitty-label">In Play</div></div>
+        <div class="kitty-box"><div class="kitty-amount" id="kitty-amt">$0</div><div class="kitty-label">Weekly Pot</div></div>
       </div>
       <div class="player-card wife" id="card-w">
         <div class="player-emoji">🧘</div>
@@ -337,7 +337,7 @@ window._firebaseLoadError = false;
         <div class="player-stats">5'3" · 130 lbs · Pilates / BV</div>
         <div class="workouts-count" id="count-w">0</div>
         <div class="workouts-label">Workouts this month</div>
-        <div class="balance-tag balance-zero" id="balance-w">$0 balance</div>
+        <div class="balance-tag balance-zero" id="balance-w">On track</div>
         <div id="btn-area-w"><button class="log-btn wife-btn" onclick="openLogModal('w')">✓ Log Natalia's Workout</button></div>
       </div>
     </div>
@@ -575,7 +575,7 @@ window._firebaseLoadError = false;
       <div class="summary-card s-workouts"><div class="s-label">Workouts</div><div class="s-value" id="s-wo-val">—</div><div class="s-sub" id="s-wo-sub"></div><div class="s-compare" id="s-wo-cmp"></div></div>
       <div class="summary-card s-calories"><div class="s-label">Avg Daily Cal</div><div class="s-value" id="s-cal-val">—</div><div class="s-sub" id="s-cal-sub"></div><div class="s-compare" id="s-cal-cmp"></div></div>
       <div class="summary-card s-streak"><div class="s-label">Current Streak</div><div class="s-value" id="s-str-val">—</div><div class="s-sub" id="s-str-sub">days in a row</div></div>
-      <div class="summary-card s-balance"><div class="s-label">$50 Rule Balance</div><div class="s-value" id="s-bal-val">—</div><div class="s-sub" id="s-bal-sub"></div></div>
+      <div class="summary-card s-balance"><div class="s-label">Weekly Penalty Balance</div><div class="s-value" id="s-bal-val">—</div><div class="s-sub" id="s-bal-sub"></div></div>
       <div class="summary-card wide" style="background:linear-gradient(135deg,var(--deep),var(--ocean));"><div class="s-label" style="color:rgba(255,255,255,.6);">Workout Rate</div><div style="display:flex;align-items:center;gap:16px;margin-top:4px;"><div class="s-value" id="s-rate-val" style="color:white;font-size:48px;">—%</div><div style="flex:1;"><div style="height:10px;background:rgba(255,255,255,.2);border-radius:99px;overflow:hidden;"><div id="s-rate-bar" style="height:100%;background:var(--sun);border-radius:99px;width:0%;transition:width .6s ease;"></div></div><div class="s-sub" id="s-rate-sub" style="color:rgba(255,255,255,.6);margin-top:4px;"></div></div></div></div>
     </div>
 
@@ -857,7 +857,7 @@ window._firebaseLoadError = false;
   .week-prog-label{font-size:11px;color:#aaa;white-space:nowrap;}
 
   /* ── Drinks Tracker ── */
-  .drinks-card{background:white;border-radius:20px;padding:20px 24px;box-shadow:0 4px 24px rgba(13,63,82,.08);margin-bottom:20px;}
+  .drinks-card{background:white;border-radius:20px;padding:20px 24px;box-shadow:0 4px 24px rgba(13,63,82,.08);margin-bottom:20px;margin-top:28px;}
   .drinks-card h3{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1px;color:var(--deep);margin-bottom:4px;}
   .drinks-subtitle{font-size:11px;color:#aaa;margin-bottom:16px;}
   .drinks-week-label{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#bbb;margin-bottom:10px;font-weight:600;}
@@ -1178,29 +1178,11 @@ async function submitLog(){
   const todayKey='logged_'+who+'_'+getTodayStr();
   const alreadyToday=!!localStorage.getItem(todayKey);
   localStorage.setItem(todayKey,'1');
-  // Only increment workout count on first log of the day
+  // Increment workout count on first log of the day only
   if(!alreadyToday) shared[who].workouts=(shared[who].workouts||0)+1;
-  const otherKey='logged_'+other+'_'+getTodayStr();
-  const otherDid=!!localStorage.getItem(otherKey);
-  let note='';
-  if(!alreadyToday){
-    if(otherDid){
-      // Other person already logged solo earlier today and got $50 — reverse it
-      const otherHadSoloEntry=shared.history.find(e=>e.who===other&&e.date===getTodayStr()&&e.transfer&&e.transfer.includes('$50'));
-      if(otherHadSoloEntry){
-        // Cancel the earlier transfer
-        shared[other].balance=(shared[other].balance||0)-50;
-        shared[who].balance=(shared[who].balance||0)+50;
-        otherHadSoloEntry.transfer='Both worked out! No transfer. High five! 🙌';
-      }
-      note='Both worked out! No transfer. High five! 🙌';
-    } else {
-      // I logged first solo today — award $50
-      shared[who].balance=(shared[who].balance||0)+50;
-      shared[other].balance=(shared[other].balance||0)-50;
-      note='+$50 earned! Partner owes you 💸';
-    }
-  }
+  const otherDid=!!localStorage.getItem('logged_'+other+'_'+getTodayStr());
+  // No per-day $50 transfer — penalties are calculated weekly (5 workouts goal)
+  const note=otherDid?'Both worked out today! 💪':'Workout logged! 🏖️';
   const names={h:'Marek',w:'Natalia'}, emojis={h:'🏄',w:'🧘'};
   const timeStr=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
   if(!shared.history) shared.history=[];
@@ -1209,7 +1191,7 @@ async function submitLog(){
   localStorage.setItem('bf_shared', JSON.stringify(shared)); localStorage.setItem('beachfit_shared', JSON.stringify(shared));
   try{ await saveShared(); }catch(e){}
   updateTrackerUI();
-  spawnConfetti(otherDid?10:5,otherDid?'#F5A623':who==='h'?'#1A6B8A':'#E8715A');
+  spawnConfetti(8, who==='h'?'#1A6B8A':'#E8715A');
 }
 
 async function deleteWorkout(idx){
@@ -1223,11 +1205,6 @@ async function deleteWorkout(idx){
 
     if(entry.date===getTodayStr()){
       shared[entry.who].workouts=Math.max(0,(shared[entry.who].workouts||1)-1);
-      if(entry.transfer&&entry.transfer.includes('$50')){
-        const other=entry.who==='h'?'w':'h';
-        shared[entry.who].balance=(shared[entry.who].balance||0)-50;
-        shared[other].balance=(shared[other].balance||0)+50;
-      }
       const remaining=shared.history.filter((e,i)=>i!==idx&&e.who===entry.who&&e.date===getTodayStr());
       if(!remaining.length) localStorage.removeItem('logged_'+entry.who+'_'+getTodayStr());
     }
@@ -1258,7 +1235,19 @@ function updateTrackerUI(){
   updateBalance('w',shared.w.balance||0);
   document.getElementById('card-h').classList.toggle('winning',(shared.h.workouts||0)>(shared.w.workouts||0));
   document.getElementById('card-w').classList.toggle('winning',(shared.w.workouts||0)>(shared.h.workouts||0));
-  document.getElementById('kitty-amt').textContent='$'+Math.max(0,Math.abs(shared.h.balance||0));
+  // Weekly pot = total penalties potentially in play this week
+  const{mon:wMon}=getWeekBounds();
+  const wToday=new Date();wToday.setHours(23,59,59,0);
+  let totalPot=0;
+  for(const pw of ['h','w']){
+    const wDays=[];
+    for(let i=0;i<7;i++){const d=new Date(wMon);d.setDate(wMon.getDate()+i);if(d<=wToday)wDays.push(d);}
+    const wDone=wDays.filter(d=>getWorkoutsForDay(pw,d.toDateString()).length>0).length;
+    const wDaysLeft=7-wDays.length;
+    const wMaxPoss=wDone+wDaysLeft;
+    if(wMaxPoss<5) totalPot+=Math.max(0,5-wDone)*20;
+  }
+  document.getElementById('kitty-amt').textContent='$'+totalPot;
   renderWeeklyGrid();
   // Button states
   const todayH='logged_h_'+getTodayStr(), todayW='logged_w_'+getTodayStr();
@@ -1277,10 +1266,20 @@ function updateTrackerUI(){
 }
 
 function updateBalance(who,val){
+  // Now shows weekly workout status instead of per-day $50 transfers
   const el=document.getElementById('balance-'+who);
-  if(val>0){el.className='balance-tag balance-pos';el.textContent='+$'+val+' owed to you';}
-  else if(val<0){el.className='balance-tag balance-neg';el.textContent='-$'+Math.abs(val)+' you owe';}
-  else{el.className='balance-tag balance-zero';el.textContent='$0 balance';}
+  const{mon}=getWeekBounds();
+  const days=[];
+  const today=new Date(); today.setHours(23,59,59,0);
+  for(let i=0;i<7;i++){const d=new Date(mon);d.setDate(mon.getDate()+i);if(d<=today)days.push(d);}
+  const done=days.filter(d=>getWorkoutsForDay(who,d.toDateString()).length>0).length;
+  const target=5;
+  const daysLeft=7-days.length;
+  const maxPossible=done+daysLeft;
+  const missed=Math.max(0,target-done);
+  if(done>=target){el.className='balance-tag balance-pos';el.textContent='Week goal hit! 🎉';}
+  else if(maxPossible<target){el.className='balance-tag balance-neg';el.textContent='-$'+(missed*20)+' this week';}
+  else{el.className='balance-tag balance-zero';el.textContent=(target-done)+' more to go';}
 }
 
 // ── Calorie tracker ───────────────────────────────────────
@@ -2000,7 +1999,17 @@ async function renderHistory(){
   document.getElementById('s-str-val').textContent=streak;
   document.getElementById('s-str-sub').textContent=streak===1?'day in a row':'days in a row';
 
-  const balText=bal===0?'$0 even':bal>0?'+$'+bal+' owed to you':'-$'+Math.abs(bal)+' you owe';
+  // Balance now based on weekly missed workouts * $20
+  const{mon:hMon}=getWeekBounds();
+  const hToday=new Date();hToday.setHours(23,59,59,0);
+  const hDays=[];
+  for(let i=0;i<7;i++){const d=new Date(hMon);d.setDate(hMon.getDate()+i);if(d<=hToday)hDays.push(d);}
+  const hDone=hDays.filter(d=>getWorkoutsForDay(histWho,d.toDateString()).length>0).length;
+  const hDaysLeft=7-hDays.length;
+  const hMaxPoss=hDone+hDaysLeft;
+  const hMissed=hMaxPoss<5?Math.max(0,5-hDone):0;
+  const hPenalty=hMissed*20;
+  const balText=hPenalty===0?(hDone>=5?'Week goal hit! 🎉':'On track'):`-$${hPenalty} this week`;
   document.getElementById('s-bal-val').textContent=balText;
   document.getElementById('s-bal-sub').textContent='vs. '+(histWho==='h'?'Natalia':'Marek');
 
