@@ -63,6 +63,8 @@ window._firebaseLoadError = false;
   .sync-dot.live{background:#4CAF50;box-shadow:0 0 6px rgba(76,175,80,.5);animation:pulse 2s infinite;}
   .sync-dot.syncing{background:var(--sun);animation:pulse 0.5s infinite;}
   .sync-dot.error{background:var(--coral);}
+  #app{display:none;}
+  #gate{display:none;}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
   .tab-nav{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;background:rgba(255,255,255,.6);border-radius:20px;padding:6px;margin-bottom:32px;backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.8);box-shadow:0 2px 16px rgba(13,63,82,.08);}
   .tab-btn{flex:0 0 auto;padding:8px 4px 6px;border:none;background:transparent;border-radius:14px;font-family:'DM Sans',sans-serif;font-size:10px;font-weight:500;cursor:pointer;color:var(--ocean);transition:all .25s;white-space:nowrap;display:flex;flex-direction:column;align-items:center;gap:3px;line-height:1;}
@@ -256,7 +258,7 @@ window._firebaseLoadError = false;
 <body>
 
 <!-- Password Gate -->
-<div id="gate" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--sand);flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;">
+<div id="gate" style="position:fixed;inset:0;z-index:9999;background:var(--sand);flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;">
   <div style="text-align:center;margin-bottom:32px;">
     <div style="font-size:48px;margin-bottom:12px;">🏖️</div>
     <div style="font-family:'Bebas Neue',sans-serif;font-size:52px;color:var(--deep);line-height:.9;letter-spacing:2px;">BEACH<span style="color:var(--wave);">FIT</span></div>
@@ -275,7 +277,7 @@ window._firebaseLoadError = false;
   </div>
 </div>
 
-<div id="app" style="display:none;">
+<div id="app">
 <div class="ocean-bg">
   <svg class="wave-layer" viewBox="0 0 1440 120" preserveAspectRatio="none" height="120"><path d="M0,60 C240,100 480,20 720,60 C960,100 1200,20 1440,60 L1440,120 L0,120 Z" fill="#1A6B8A" opacity="0.7"/></svg>
   <svg class="wave-layer" viewBox="0 0 1440 120" preserveAspectRatio="none" height="120"><path d="M0,40 C360,90 720,10 1080,50 C1260,70 1380,30 1440,40 L1440,120 L0,120 Z" fill="#2596BE" opacity="0.5"/></svg>
@@ -2139,15 +2141,15 @@ function unlockApp(){
   init();
 }
 
-// Run after DOM is ready
-window.addEventListener('DOMContentLoaded', function(){
+// Runs immediately when script is parsed (page bottom = DOM is ready)
+(function(){
   if(localStorage.getItem(PASS_KEY)==='1'){
     unlockApp();
   } else {
     document.getElementById('gate').style.display='flex';
-    setTimeout(()=>{ const i=document.getElementById('gate-input'); if(i) i.focus(); },100);
+    setTimeout(function(){ var i=document.getElementById('gate-input'); if(i) i.focus(); }, 100);
   }
-});
+})();
 
 </script>
 </div><!-- #app -->
