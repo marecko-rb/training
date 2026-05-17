@@ -1507,7 +1507,12 @@ async function loadMeasurements(){
 async function saveMeasurementsToStorage(){
   const data=measData[measWho];
   localStorage.setItem('meas_'+measWho, JSON.stringify(data));
-  try{ await set(ref(db,'measurements/'+measWho), data); }catch(e){}
+  if(db){
+    try{
+      await firebase.database().ref('measurements/'+measWho).set(data);
+      console.log('Measurements saved to Firebase for', measWho, data.length, 'entries');
+    }catch(e){ console.error('Measurement sync failed:', e); }
+  }
 }
 
 function saveMeasurement(){
