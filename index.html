@@ -1261,7 +1261,7 @@ function updateTrackerUI(){
   // Button states
   const todayH='logged_h_'+getTodayStr(), todayW='logged_w_'+getTodayStr();
   const bhEl=document.getElementById('btn-area-h'), bwEl=document.getElementById('btn-area-w');
-  bhEl.innerHTML=localStorage.getItem(todayH)?'<div class="logged-badge">✓ Logged today!</div>':'<button class="log-btn" onclick="openLogModal(\'h\')">✓ Log Marek's Workout</button>';
+  bhEl.innerHTML=localStorage.getItem(todayH)?'<div class="logged-badge">✓ Logged today!</div>':'<button class="log-btn" onclick="openLogModal(\'h\')">✓ Log Marek\'s Workout</button>';
   bwEl.innerHTML=localStorage.getItem(todayW)?'<div class="logged-badge">✓ Logged today!</div>':'<button class="log-btn wife-btn" onclick="openLogModal(\'w\')">✓ Log Natalia\'s Workout</button>';
   // History
   const el=document.getElementById('history-list');
