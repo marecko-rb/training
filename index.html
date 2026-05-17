@@ -906,11 +906,17 @@ const firebaseConfig = {
 let db, ref, set, onValue, get;
 
 async function initFirebase(){
-  const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
-  const fbdb = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
-  ref = fbdb.ref; set = fbdb.set; onValue = fbdb.onValue; get = fbdb.get;
-  const firebaseApp = initializeApp(firebaseConfig);
-  db = fbdb.getDatabase(firebaseApp);
+  try{
+    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
+    const fbdb = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
+    ref = fbdb.ref; set = fbdb.set; onValue = fbdb.onValue; get = fbdb.get;
+    const firebaseApp = initializeApp(firebaseConfig);
+    db = fbdb.getDatabase(firebaseApp);
+    console.log('Firebase connected');
+  }catch(e){
+    console.warn('Firebase unavailable, running in local mode:', e.message);
+    db = null;
+  }
 }
 
 let shared = { h:{workouts:0,balance:0}, w:{workouts:0,balance:0}, history:[] };
@@ -930,6 +936,7 @@ function setSyncStatus(status){
 async function saveShared(){
   setSyncStatus('syncing');
   localStorage.setItem('bf_shared', JSON.stringify(shared));
+  if(!db){ setSyncStatus('error'); return; }
   try{
     await set(ref(db,'tracker/shared'), JSON.parse(JSON.stringify(shared)));
     setSyncStatus('live');
@@ -941,22 +948,26 @@ async function loadShared(){
     const local=localStorage.getItem('bf_shared');
     if(local){ const p=JSON.parse(local); shared={...shared,...p}; if(!shared.history)shared.history=[]; }
   }catch(e){}
-  try{
-    const snap=await get(ref(db,'tracker/shared'));
-    if(snap.exists()){
-      const parsed=snap.val();
-      shared={...shared,...parsed};
-      if(!shared.history)shared.history=[];
-      localStorage.setItem('bf_shared',JSON.stringify(shared));
-    }
-    setSyncStatus('live');
-  }catch(e){ console.error('Firebase load:',e); setSyncStatus('error'); }
+  if(db){
+    try{
+      const snap=await get(ref(db,'tracker/shared'));
+      if(snap.exists()){
+        const parsed=snap.val();
+        shared={...shared,...parsed};
+        if(!shared.history)shared.history=[];
+        localStorage.setItem('bf_shared',JSON.stringify(shared));
+      }
+      setSyncStatus('live');
+    }catch(e){ console.error('Firebase load:',e); setSyncStatus('error'); }
+  } else {
+    setSyncStatus('error');
+  }
   purgeTombstones();
   updateTrackerUI();
 }
 
 function startRealtimeSync(){
-  if(firebaseListenerActive) return;
+  if(!db||firebaseListenerActive) return;
   firebaseListenerActive=true;
   onValue(ref(db,'tracker/shared'),(snap)=>{
     if(!snap.exists()) return;
@@ -976,22 +987,24 @@ function fbCalKey(who,offset){ return 'cal_'+who+'_'+getOffsetDate(offset).toDat
 
 async function saveCalEntries(who,offset,entries){
   localStorage.setItem(calKey(who,offset),JSON.stringify(entries));
-  try{ await set(ref(db,'calories/'+fbCalKey(who,offset)), entries); }catch(e){}
+  if(db){ try{ await set(ref(db,'calories/'+fbCalKey(who,offset)), entries); }catch(e){} }
 }
 async function loadCalEntries(who,offset){
-  try{
-    const snap=await get(ref(db,'calories/'+fbCalKey(who,offset)));
-    if(snap.exists()){ const d=snap.val(); localStorage.setItem(calKey(who,offset),JSON.stringify(d)); return d; }
-  }catch(e){}
+  if(db){
+    try{
+      const snap=await get(ref(db,'calories/'+fbCalKey(who,offset)));
+      if(snap.exists()){ const d=snap.val(); localStorage.setItem(calKey(who,offset),JSON.stringify(d)); return d; }
+    }catch(e){}
+  }
   try{ const l=localStorage.getItem(calKey(who,offset)); if(l) return JSON.parse(l); }catch(e){}
   return [];
 }
 async function saveRecents(who,list){
   localStorage.setItem('recents_'+who,JSON.stringify(list));
-  try{ await set(ref(db,'recents/'+who), list); }catch(e){}
+  if(db){ try{ await set(ref(db,'recents/'+who), list); }catch(e){} }
 }
 async function loadRecents(who){
-  try{ const snap=await get(ref(db,'recents/'+who)); if(snap.exists()) return snap.val(); }catch(e){}
+  if(db){ try{ const snap=await get(ref(db,'recents/'+who)); if(snap.exists()) return snap.val(); }catch(e){} }
   try{ const l=localStorage.getItem('recents_'+who); if(l) return JSON.parse(l); }catch(e){}
   return [];
 }
@@ -1349,10 +1362,12 @@ function setMeasWho(who){
 
 async function loadMeasurements(){
   for(const who of ['h','w']){
-    try{
-      const snap=await get(ref(db,'measurements/'+who));
-      if(snap.exists()) measData[who]=snap.val();
-    }catch(e){}
+    if(db){
+      try{
+        const snap=await get(ref(db,'measurements/'+who));
+        if(snap.exists()) measData[who]=snap.val();
+      }catch(e){}
+    }
     if(!measData[who].length){
       try{
         const local=localStorage.getItem('meas_'+who);
@@ -1604,10 +1619,12 @@ function getWorkoutsForDay(who, dateStr){
 async function getCaloriesForDay(who, date){
   const fbKey='cal_'+who+'_'+date.toDateString().replace(/ /g,'_');
   const lsKey='cal_'+who+'_'+date.toDateString();
-  try{
-    const snap=await get(ref(db,'calories/'+fbKey));
-    if(snap.exists()){ const entries=snap.val(); return entries.reduce((s,e)=>s+(e.cal||0),0); }
-  }catch(e){}
+  if(db){
+    try{
+      const snap=await get(ref(db,'calories/'+fbKey));
+      if(snap.exists()){ const entries=snap.val(); return entries.reduce((s,e)=>s+(e.cal||0),0); }
+    }catch(e){}
+  }
   try{
     const local=localStorage.getItem(lsKey);
     if(local){ const entries=JSON.parse(local); return entries.reduce((s,e)=>s+(e.cal||0),0); }
