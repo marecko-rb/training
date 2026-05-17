@@ -1488,17 +1488,28 @@ function setMeasWho(who){
 
 async function loadMeasurements(){
   for(const who of ['h','w']){
+    // Load from localStorage first (instant)
+    try{
+      const local=localStorage.getItem('meas_'+who);
+      if(local){ const p=JSON.parse(local); if(p&&p.length) measData[who]=p; }
+    }catch(e){}
+    // Then load from Firebase (may be more up to date from other device)
     if(db){
       try{
         const snap=await firebase.database().ref('measurements/'+who).once('value');
-        if(snap.exists()) measData[who]=snap.val();
-      }catch(e){}
-    }
-    if(!measData[who].length){
-      try{
-        const local=localStorage.getItem('meas_'+who);
-        if(local) measData[who]=JSON.parse(local);
-      }catch(e){}
+        if(snap.exists()){
+          const raw=snap.val();
+          // Firebase turns arrays into objects with numeric keys — convert back
+          let arr=Array.isArray(raw)
+            ? raw
+            : Object.values(raw).filter(e=>e&&e.date);
+          arr.sort((a,b)=>a.date.localeCompare(b.date));
+          if(arr.length>0){
+            measData[who]=arr;
+            localStorage.setItem('meas_'+who, JSON.stringify(arr));
+          }
+        }
+      }catch(e){ console.warn('Meas Firebase load error:', who, e); }
     }
   }
   renderMeasurements();
@@ -1509,40 +1520,51 @@ async function saveMeasurementsToStorage(){
   localStorage.setItem('meas_'+measWho, JSON.stringify(data));
   if(db){
     try{
-      await firebase.database().ref('measurements/'+measWho).set(data);
-      console.log('Measurements saved to Firebase for', measWho, data.length, 'entries');
+      // Store as object keyed by date to avoid Firebase array-to-object mangling
+      const obj={};
+      data.forEach(entry=>{ obj[entry.date.replace(/ /g,'_')]=entry; });
+      await firebase.database().ref('measurements/'+measWho).set(obj);
+      console.log('Meas saved to Firebase:', measWho, data.length, 'entries');
     }catch(e){ console.error('Measurement sync failed:', e); }
   }
 }
 
-function saveMeasurement(){
+async function saveMeasurement(){
   const dateVal=document.getElementById('meas-date').value;
   if(!dateVal){ alert('Please select a date.'); return; }
   const entry={date:dateVal};
   let hasAny=false;
   MEAS_FIELDS.forEach(f=>{
     if(f.auto) return; // skip auto-calculated fields
-    const v=parseFloat(document.getElementById('mf-'+f.id).value);
+    const el=document.getElementById('mf-'+f.id);
+    if(!el) return; // BMI has no input
+    const v=parseFloat(el.value);
     if(!isNaN(v)&&v>0){ entry[f.id]=v; hasAny=true; }
   });
   // Auto-calculate BMI from weight
   if(entry.weight){
     const bmi=calcBMI(entry.weight, measWho);
-    if(bmi) entry.bmi=bmi;
+    if(bmi) entry.bmi=Math.round(bmi*10)/10;
   }
   if(!hasAny){ alert('Enter at least one measurement.'); return; }
 
-  // Remove existing entry for same date
+  // Remove existing entry for same date, add new, sort
   measData[measWho]=measData[measWho].filter(e=>e.date!==dateVal);
   measData[measWho].push(entry);
-  // Sort by date ascending
   measData[measWho].sort((a,b)=>a.date.localeCompare(b.date));
 
-  saveMeasurementsToStorage();
+  // Clear inputs (only real input fields)
+  MEAS_FIELDS.forEach(f=>{
+    if(f.auto) return;
+    const el=document.getElementById('mf-'+f.id);
+    if(el) el.value='';
+  });
 
-  // Clear inputs
-  MEAS_FIELDS.forEach(f=>{ document.getElementById('mf-'+f.id).value=''; });
+  // Render immediately so UI updates right away
   renderMeasurements();
+
+  // Then save to storage + Firebase in background
+  await saveMeasurementsToStorage();
 }
 
 async function deleteMeasurement(date){
