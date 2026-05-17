@@ -4,6 +4,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Beach Fit — Redondo Beach</title>
+<!-- Firebase compat SDK (works without type=module) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script>
+  firebase.initializeApp({
+    apiKey: "AIzaSyBfZBdXirT0xIiSLfQ6VNeegB_pneOwrx4",
+    authDomain: "beachfit-app.firebaseapp.com",
+    databaseURL: "https://beachfit-app-default-rtdb.firebaseio.com",
+    projectId: "beachfit-app",
+    storageBucket: "beachfit-app.firebasestorage.app",
+    messagingSenderId: "918105846256",
+    appId: "1:918105846256:web:e771e8812e3e7bfe47ed35"
+  });
+</script>
 <!-- Block all search engines, crawlers, and AI bots -->
 <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex, nocache">
 <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
@@ -269,15 +283,21 @@
   <!-- TRACKER -->
   <div id="tab-tracker" class="tab-content active">
     <div class="rules-card">
-      <h3>⚡ The $50 Rule</h3>
+      <h3>⚡ The Rules</h3>
       <ul class="rules-list">
-        <li><span class="rule-icon">💸</span>If you work out today and your partner doesn't: they owe you $50.</li>
-        <li><span class="rule-icon">🤝</span>Both work out: no transfer — just vibes and proud faces.</li>
-        <li><span class="rule-icon">🛋️</span>Neither works out: no transfer — but you both feel guilty.</li>
-        <li><span class="rule-icon">🏐</span>Beach volleyball counts for both. Pilates counts for Natalia. Surfing counts for you.</li>
-        <li><span class="rule-icon">🗓️</span>1 scheduled rest day per week each — rest days = no rules apply.</li>
+        <li><span class="rule-icon">🏋️</span>Goal: <strong>5 workouts per week</strong> (Mon–Sun). Every workout under 5 = $20 owed to partner.</li>
+        <li><span class="rule-icon">🍷</span>Max <strong>2 drinks per week</strong>. Every drink over 2 = $20 owed to partner.</li>
+        <li><span class="rule-icon">🏐</span>Beach volleyball, Pilates, surfing, and Strand walks all count as workouts.</li>
+        <li><span class="rule-icon">😴</span>Rest days still count as missed workouts toward the weekly 5 goal.</li>
       </ul>
     </div>
+    <!-- Weekly Tracker -->
+    <div class="weekly-card">
+      <h3>📅 This Week</h3>
+      <div class="weekly-subtitle">Mon–Sun · Goal: 5 workouts · $20 per missed workout</div>
+      <div id="weekly-grid"></div>
+    </div>
+
     <div class="scoreboard">
       <div class="player-card husband" id="card-h">
         <div class="player-emoji">🏄</div>
@@ -493,6 +513,25 @@
       </details>
     </div>
     <div class="food-log-card"><h3>📋 Today's Log</h3><div id="food-log-list"><p class="food-log-empty">Nothing logged yet — add your first meal! 🥗</p></div></div>
+
+    <!-- Drinks Tracker -->
+    <div class="drinks-card">
+      <h3>🍷 Drinks This Week</h3>
+      <div class="drinks-subtitle">Mon–Sun · Max 2/week · $20 per drink over limit</div>
+      <div class="drinks-week-label" id="drinks-week-label">This week</div>
+      <div class="drinks-counter">
+        <div class="drinks-count-big" id="drinks-count">0</div>
+        <div class="drinks-info">
+          <div class="drinks-limit">of 2 allowed this week</div>
+          <div class="drinks-penalty" id="drinks-penalty"></div>
+        </div>
+      </div>
+      <div class="drinks-bubbles" id="drinks-bubbles"></div>
+      <div class="drinks-btns">
+        <button class="drink-add-btn" onclick="addDrink()">🍷 Log a Drink</button>
+        <button class="drink-remove-btn" onclick="removeDrink()">↩ Undo</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -769,6 +808,57 @@
   .meas-entry-vals{font-size:11px;color:#aaa;line-height:1.6;}
   .meas-del-btn{background:none;border:none;color:#ddd;font-size:14px;cursor:pointer;padding:2px 4px;flex-shrink:0;}
   .meas-del-btn:hover{color:var(--coral);}
+
+  /* ── Weekly Tracker ── */
+  .weekly-card{background:white;border-radius:20px;padding:20px;box-shadow:0 4px 24px rgba(13,63,82,.08);margin-bottom:20px;}
+  .weekly-card h3{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1px;color:var(--deep);margin-bottom:4px;}
+  .weekly-subtitle{font-size:11px;color:#aaa;margin-bottom:16px;}
+  .weekly-person{margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #f0f0f0;}
+  .weekly-person:last-child{margin-bottom:0;padding-bottom:0;border-bottom:none;}
+  .weekly-person-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .weekly-person-name{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:1px;}
+  .weekly-person-name.h-name{color:var(--ocean);}
+  .weekly-person-name.w-name{color:var(--coral);}
+  .weekly-penalty{font-size:12px;font-weight:600;padding:4px 10px;border-radius:50px;}
+  .penalty-owe{background:#FFEBEE;color:#C62828;}
+  .penalty-ok{background:#E8F5E9;color:#2E7D32;}
+  .penalty-pending{background:#FFF8E1;color:#F57F17;}
+  .week-days-row{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;}
+  .week-day-cell{display:flex;flex-direction:column;align-items:center;gap:3px;}
+  .week-day-name{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#bbb;}
+  .week-day-bubble{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;transition:all .2s;}
+  .bubble-done-h{background:linear-gradient(135deg,var(--ocean),var(--wave));color:white;}
+  .bubble-done-w{background:linear-gradient(135deg,var(--coral),var(--dusk));color:white;}
+  .bubble-today{background:#f0f0f0;color:var(--deep);border:2px solid var(--ocean);}
+  .bubble-missed{background:#FFEBEE;color:#E57373;}
+  .bubble-future{background:#fafafa;color:#ddd;}
+  .week-progress{margin-top:10px;display:flex;align-items:center;gap:8px;}
+  .week-prog-bar{flex:1;height:6px;background:#f0f0f0;border-radius:99px;overflow:hidden;}
+  .week-prog-fill{height:100%;border-radius:99px;transition:width .5s ease;}
+  .week-prog-label{font-size:11px;color:#aaa;white-space:nowrap;}
+
+  /* ── Drinks Tracker ── */
+  .drinks-card{background:white;border-radius:20px;padding:20px 24px;box-shadow:0 4px 24px rgba(13,63,82,.08);margin-bottom:20px;}
+  .drinks-card h3{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1px;color:var(--deep);margin-bottom:4px;}
+  .drinks-subtitle{font-size:11px;color:#aaa;margin-bottom:16px;}
+  .drinks-week-label{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#bbb;margin-bottom:10px;font-weight:600;}
+  .drinks-counter{display:flex;align-items:center;gap:16px;margin-bottom:14px;}
+  .drinks-count-big{font-family:'Bebas Neue',sans-serif;font-size:56px;line-height:1;color:var(--deep);}
+  .drinks-count-big.over{color:var(--coral);}
+  .drinks-info{flex:1;}
+  .drinks-limit{font-size:13px;color:#aaa;margin-bottom:4px;}
+  .drinks-penalty{font-size:13px;font-weight:600;}
+  .drinks-penalty.owe{color:#C62828;}
+  .drinks-penalty.safe{color:#2E7D32;}
+  .drinks-bubbles{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;}
+  .drink-bubble{width:36px;height:36px;border-radius:50%;border:2px solid #e0e0e0;background:#fafafa;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;transition:all .2s;}
+  .drink-bubble.filled{background:linear-gradient(135deg,#8B4513,#A0522D);border-color:#8B4513;}
+  .drink-bubble.over-limit{background:linear-gradient(135deg,var(--coral),var(--dusk));border-color:var(--coral);}
+  .drinks-btns{display:flex;gap:8px;}
+  .drink-add-btn{flex:1;padding:10px;border:2px solid var(--ocean);background:transparent;color:var(--ocean);border-radius:12px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:all .2s;}
+  .drink-add-btn:hover{background:var(--ocean);color:white;}
+  .drink-remove-btn{padding:10px 14px;border:2px solid #e0e0e0;background:transparent;color:#aaa;border-radius:12px;font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;transition:all .2s;}
+  .drink-remove-btn:hover{border-color:var(--coral);color:var(--coral);}
 </style>
 
 <script>
@@ -893,28 +983,21 @@ const TARGETS={
   w:{cal:1800,p:130,c:180,f:60,label:'1,800 cal · Recomposition',color:'#E8715A'}
 };
 
-// ── Firebase — loaded dynamically so no type=module needed ──
-const firebaseConfig = {
-  apiKey: "AIzaSyBfZBdXirT0xIiSLfQ6VNeegB_pneOwrx4",
-  authDomain: "beachfit-app.firebaseapp.com",
-  databaseURL: "https://beachfit-app-default-rtdb.firebaseio.com",
-  projectId: "beachfit-app",
-  storageBucket: "beachfit-app.firebasestorage.app",
-  messagingSenderId: "918105846256",
-  appId: "1:918105846256:web:e771e8812e3e7bfe47ed35"
-};
-let db, ref, set, onValue, get;
+// ── Firebase — uses global SDK loaded via <script> tags in <head> ──
+let db=null, ref, set, onValue, get;
 
 async function initFirebase(){
   try{
-    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
-    const fbdb = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
-    ref = fbdb.ref; set = fbdb.set; onValue = fbdb.onValue; get = fbdb.get;
-    const firebaseApp = initializeApp(firebaseConfig);
-    db = fbdb.getDatabase(firebaseApp);
-    console.log('Firebase connected');
+    if(typeof firebase==='undefined'){ throw new Error('Firebase SDK not loaded'); }
+    if(location.protocol==='file:'){
+      console.warn('Running as local file — Firebase requires HTTPS. Deploy to GitHub Pages for sync.');
+      setSyncStatus('error');
+      db=null; return;
+    }
+    db = firebase.database();
+    console.log('Firebase connected ✓');
   }catch(e){
-    console.warn('Firebase unavailable, running in local mode:', e.message);
+    console.warn('Firebase unavailable:', e.message);
     db = null;
   }
 }
@@ -927,10 +1010,12 @@ let firebaseListenerActive=false;
 function setSyncStatus(status){
   const dot=document.getElementById('sync-dot');
   const label=document.getElementById('sync-label');
+  if(!dot||!label) return;
   dot.className='sync-dot '+status;
   if(status==='live') label.textContent='Live — syncing between devices';
-  else if(status==='syncing') label.textContent='Syncing…';
-  else label.textContent='Offline — changes saved locally';
+  else if(status==='syncing') label.textContent='Connecting…';
+  else if(location.protocol==='file:') label.textContent='Open via HTTPS for live sync';
+  else label.textContent='Offline — data saved locally';
 }
 
 async function saveShared(){
@@ -938,7 +1023,7 @@ async function saveShared(){
   localStorage.setItem('bf_shared', JSON.stringify(shared));
   if(!db){ setSyncStatus('error'); return; }
   try{
-    await set(ref(db,'tracker/shared'), JSON.parse(JSON.stringify(shared)));
+    await firebase.database().ref('tracker/shared').set(JSON.parse(JSON.stringify(shared)));
     setSyncStatus('live');
   }catch(e){ console.error('Firebase save:',e); setSyncStatus('error'); }
 }
@@ -950,7 +1035,7 @@ async function loadShared(){
   }catch(e){}
   if(db){
     try{
-      const snap=await get(ref(db,'tracker/shared'));
+      const snap=await firebase.database().ref('tracker/shared').once('value');
       if(snap.exists()){
         const parsed=snap.val();
         shared={...shared,...parsed};
@@ -969,7 +1054,7 @@ async function loadShared(){
 function startRealtimeSync(){
   if(!db||firebaseListenerActive) return;
   firebaseListenerActive=true;
-  onValue(ref(db,'tracker/shared'),(snap)=>{
+  firebase.database().ref('tracker/shared').on('value',(snap)=>{
     if(!snap.exists()) return;
     const parsed=snap.val();
     if(JSON.stringify(parsed)===JSON.stringify(shared)) return;
@@ -987,12 +1072,12 @@ function fbCalKey(who,offset){ return 'cal_'+who+'_'+getOffsetDate(offset).toDat
 
 async function saveCalEntries(who,offset,entries){
   localStorage.setItem(calKey(who,offset),JSON.stringify(entries));
-  if(db){ try{ await set(ref(db,'calories/'+fbCalKey(who,offset)), entries); }catch(e){} }
+  if(db){ try{ await firebase.database().ref('calories/'+fbCalKey(who,offset)).set(entries); }catch(e){} }
 }
 async function loadCalEntries(who,offset){
   if(db){
     try{
-      const snap=await get(ref(db,'calories/'+fbCalKey(who,offset)));
+      const snap=await firebase.database().ref('calories/'+fbCalKey(who,offset)).once('value');
       if(snap.exists()){ const d=snap.val(); localStorage.setItem(calKey(who,offset),JSON.stringify(d)); return d; }
     }catch(e){}
   }
@@ -1001,10 +1086,10 @@ async function loadCalEntries(who,offset){
 }
 async function saveRecents(who,list){
   localStorage.setItem('recents_'+who,JSON.stringify(list));
-  if(db){ try{ await set(ref(db,'recents/'+who), list); }catch(e){} }
+  if(db){ try{ await firebase.database().ref('recents/'+who).set(list); }catch(e){} }
 }
 async function loadRecents(who){
-  if(db){ try{ const snap=await get(ref(db,'recents/'+who)); if(snap.exists()) return snap.val(); }catch(e){} }
+  if(db){ try{ const snap=await firebase.database().ref('recents/'+who).once('value'); if(snap.exists()) return snap.val(); }catch(e){} }
   try{ const l=localStorage.getItem('recents_'+who); if(l) return JSON.parse(l); }catch(e){}
   return [];
 }
@@ -1149,13 +1234,15 @@ function purgeTombstones(){
 }
 
 function updateTrackerUI(){
-  document.getElementById('count-h').textContent=shared.h.workouts||0;
+  try{
+    document.getElementById('count-h').textContent=shared.h.workouts||0;
   document.getElementById('count-w').textContent=shared.w.workouts||0;
   updateBalance('h',shared.h.balance||0);
   updateBalance('w',shared.w.balance||0);
   document.getElementById('card-h').classList.toggle('winning',(shared.h.workouts||0)>(shared.w.workouts||0));
   document.getElementById('card-w').classList.toggle('winning',(shared.w.workouts||0)>(shared.h.workouts||0));
   document.getElementById('kitty-amt').textContent='$'+Math.max(0,Math.abs(shared.h.balance||0));
+  renderWeeklyGrid();
   // Button states
   const todayH='logged_h_'+getTodayStr(), todayW='logged_w_'+getTodayStr();
   const bhEl=document.getElementById('btn-area-h'), bwEl=document.getElementById('btn-area-w');
@@ -1169,6 +1256,7 @@ function updateTrackerUI(){
     const dateLabel=e.date?(()=>{const d=new Date(e.date);const today=new Date();const yesterday=new Date();yesterday.setDate(yesterday.getDate()-1);if(d.toDateString()===today.toDateString())return'Today';if(d.toDateString()===yesterday.toDateString())return'Yesterday';return d.toLocaleDateString([],{month:'short',day:'numeric'});})():'';
     return`<div class="log-entry"><div class="log-dot ${e.who==='h'?'dot-h':'dot-w'}"></div><div class="log-text"><div>${e.text}${detail?'<span style="color:#bbb;font-size:11px;"> '+detail+'</span>':''}</div>${e.transfer?'<div class="log-transfer" style="font-size:11px;">'+e.transfer+'</div>':''}</div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;"><div class="log-date">${dateLabel?dateLabel+' · ':''} ${e.time}</div><button onclick="deleteWorkout(${i})" style="background:none;border:none;color:#ddd;font-size:13px;cursor:pointer;padding:0;" title="Remove">✕</button></div></div>`;
   }).join('');}
+  } catch(e){ console.error('updateTrackerUI error:',e); }
 }
 
 function updateBalance(who,val){
@@ -1223,6 +1311,7 @@ function renderCalTracker(){
   document.getElementById('bar-label-c').textContent=Math.round(tot.c)+' / '+t.c+'g';
   document.getElementById('bar-label-f').textContent=Math.round(tot.f)+' / '+t.f+'g';
   document.getElementById('cal-target-note').textContent='Target: '+t.label;
+  renderDrinks();
   const rs=document.getElementById('recent-section'), rb=document.getElementById('recent-btns');
   if(calRecents.length>0){
     rs.style.display='block';
@@ -1364,7 +1453,7 @@ async function loadMeasurements(){
   for(const who of ['h','w']){
     if(db){
       try{
-        const snap=await get(ref(db,'measurements/'+who));
+        const snap=await firebase.database().ref('measurements/'+who).once('value');
         if(snap.exists()) measData[who]=snap.val();
       }catch(e){}
     }
@@ -1585,6 +1674,184 @@ function drawLineChart(ctx, canvas, labels, values, color, label, unit){
   });
 }
 
+// ── Weekly Workout Tracker ────────────────────────────────
+function getWeekBounds(){
+  const now=new Date();
+  const day=now.getDay(); // 0=Sun
+  const mon=new Date(now); mon.setDate(now.getDate()-(day===0?6:day-1)); mon.setHours(0,0,0,0);
+  const sun=new Date(mon); sun.setDate(mon.getDate()+6); sun.setHours(23,59,59,999);
+  return{mon,sun};
+}
+
+function getDayName(d){ return['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]; }
+
+function renderWeeklyGrid(){
+  const{mon,sun}=getWeekBounds();
+  const today=new Date(); today.setHours(0,0,0,0);
+  const todayStr=today.toDateString();
+
+  // Build 7 days Mon–Sun
+  const days=[];
+  for(let i=0;i<7;i++){
+    const d=new Date(mon); d.setDate(mon.getDate()+i);
+    days.push(d);
+  }
+
+  let html='';
+  for(const who of ['h','w']){
+    const name=who==='h'?'MAREK':'NATALIA';
+    const cls=who==='h'?'h-name':'w-name';
+    const bubbleCls=who==='h'?'bubble-done-h':'bubble-done-w';
+
+    let doneCount=0;
+    let dayHtml='<div class="week-days-row">';
+    days.forEach(d=>{
+      const ds=d.toDateString();
+      const isPast=d<today;
+      const isToday=ds===todayStr;
+      const isFuture=d>today;
+      const worked=getWorkoutsForDay(who,ds).length>0;
+      if(worked) doneCount++;
+      let bubCls='week-day-bubble ';
+      let label='';
+      if(worked){ bubCls+=bubbleCls; label='✓'; }
+      else if(isToday){ bubCls+='bubble-today'; label=d.getDate(); }
+      else if(isPast){ bubCls+='bubble-missed'; label='✗'; }
+      else{ bubCls+='bubble-future'; label=d.getDate(); }
+      dayHtml+=`<div class="week-day-cell">
+        <div class="week-day-name">${getDayName(d)}</div>
+        <div class="${bubCls}">${label}</div>
+      </div>`;
+    });
+    dayHtml+='</div>';
+
+    // Count remaining days in week (including today) to know if week is complete
+    const daysLeft=days.filter(d=>d>=today).length;
+    const daysElapsed=7-daysLeft;
+    const target=5;
+    const missed=Math.max(0,target-doneCount);
+    const weekDone=daysLeft===0||(today>sun);
+    const maxPossible=doneCount+daysLeft;
+    const canStillHit=maxPossible>=target;
+
+    let penaltyHtml='';
+    let penaltyCls='';
+    if(weekDone||!canStillHit){
+      // Week over or mathematically impossible
+      const owes=missed*20;
+      if(owes>0){
+        penaltyHtml=`-$${owes} owed`;
+        penaltyCls='penalty-owe';
+      } else {
+        penaltyHtml='Week complete ✓';
+        penaltyCls='penalty-ok';
+      }
+    } else {
+      const needed=target-doneCount;
+      if(needed<=0){
+        penaltyHtml='Week goal hit! 🎉';
+        penaltyCls='penalty-ok';
+      } else {
+        penaltyHtml=`${needed} more needed`;
+        penaltyCls='penalty-pending';
+      }
+    }
+
+    const pct=Math.min(100,(doneCount/target)*100);
+    const barColor=who==='h'?'var(--ocean)':'var(--coral)';
+
+    html+=`<div class="weekly-person">
+      <div class="weekly-person-header">
+        <div class="weekly-person-name ${cls}">${name}</div>
+        <div class="weekly-penalty ${penaltyCls}">${penaltyHtml}</div>
+      </div>
+      ${dayHtml}
+      <div class="week-progress">
+        <div class="week-prog-bar"><div class="week-prog-fill" style="width:${pct}%;background:${barColor};"></div></div>
+        <div class="week-prog-label">${doneCount}/${target}</div>
+      </div>
+    </div>`;
+  }
+
+  const el=document.getElementById('weekly-grid');
+  if(el) el.innerHTML=html;
+}
+
+// ── Drinks Tracker ────────────────────────────────────────
+// Drinks stored per person per week: 'drinks_h_WEEKSTART' -> count
+function getWeekStartStr(){
+  const{mon}=getWeekBounds();
+  return mon.toDateString();
+}
+function drinksKey(who){ return 'drinks_'+who+'_'+getWeekStartStr(); }
+
+function getDrinksCount(who){
+  // From shared state (synced)
+  if(shared.drinks&&shared.drinks[who]&&shared.drinks[who][getWeekStartStr()])
+    return shared.drinks[who][getWeekStartStr()]||0;
+  // Fallback localStorage
+  return parseInt(localStorage.getItem(drinksKey(who))||'0');
+}
+
+async function addDrink(){
+  const who=calWho;
+  if(!shared.drinks) shared.drinks={};
+  if(!shared.drinks[who]) shared.drinks[who]={};
+  const wk=getWeekStartStr();
+  shared.drinks[who][wk]=(shared.drinks[who][wk]||0)+1;
+  localStorage.setItem(drinksKey(who), shared.drinks[who][wk]);
+  await saveShared();
+  renderDrinks();
+}
+
+async function removeDrink(){
+  const who=calWho;
+  if(!shared.drinks||!shared.drinks[who]) return;
+  const wk=getWeekStartStr();
+  shared.drinks[who][wk]=Math.max(0,(shared.drinks[who][wk]||0)-1);
+  localStorage.setItem(drinksKey(who), shared.drinks[who][wk]);
+  await saveShared();
+  renderDrinks();
+}
+
+function renderDrinks(){
+  const who=calWho;
+  const count=getDrinksCount(who);
+  const limit=2;
+  const over=Math.max(0,count-limit);
+  const penalty=over*20;
+
+  const countEl=document.getElementById('drinks-count');
+  if(!countEl) return;
+  countEl.textContent=count;
+  countEl.className='drinks-count-big'+(count>limit?' over':'');
+
+  const{mon,sun}=getWeekBounds();
+  const weekLabel=mon.toLocaleDateString([],{month:'short',day:'numeric'})+' – '+sun.toLocaleDateString([],{month:'short',day:'numeric'});
+  document.getElementById('drinks-week-label').textContent=weekLabel;
+
+  const penaltyEl=document.getElementById('drinks-penalty');
+  if(over>0){
+    penaltyEl.textContent=`-$${penalty} owed (${over} over limit)`;
+    penaltyEl.className='drinks-penalty owe';
+  } else {
+    penaltyEl.textContent=count===0?'No drinks this week 👏':`${limit-count} more allowed`;
+    penaltyEl.className='drinks-penalty safe';
+  }
+
+  // Bubbles — show up to max(count, limit) + over bubbles
+  const total=Math.max(limit,count);
+  let bubblesHtml='';
+  for(let i=0;i<total;i++){
+    const filled=i<count;
+    const isOver=i>=limit;
+    const cls='drink-bubble'+(filled?(isOver?' over-limit':' filled'):'');
+    bubblesHtml+=`<div class="${cls}">${filled?'🍷':'○'}</div>`;
+  }
+  document.getElementById('drinks-bubbles').innerHTML=bubblesHtml;
+}
+
+
 // ── Calendar / History ────────────────────────────────────
 let histWho='h', histPeriod=7, histMonthOffset=0;
 
@@ -1621,7 +1888,7 @@ async function getCaloriesForDay(who, date){
   const lsKey='cal_'+who+'_'+date.toDateString();
   if(db){
     try{
-      const snap=await get(ref(db,'calories/'+fbKey));
+      const snap=await firebase.database().ref('calories/'+fbKey).once('value');
       if(snap.exists()){ const entries=snap.val(); return entries.reduce((s,e)=>s+(e.cal||0),0); }
     }catch(e){}
   }
@@ -1817,12 +2084,14 @@ function showDayDetail(dateStr){
 
 // ── Init ──────────────────────────────────────────────────
 async function init(){
-  setSyncStatus('syncing');
-  await initFirebase();
-  await loadShared();
-  await refreshCalData();
-  // Poll for updates every 15s so both phones stay in sync
-  startRealtimeSync();
+  try{ setSyncStatus('syncing'); }catch(e){}
+  try{ await initFirebase(); }catch(e){ console.error('initFirebase failed:',e); db=null; }
+  try{ await loadShared(); }catch(e){ console.error('loadShared failed:',e); }
+  try{ await refreshCalData(); }catch(e){ console.error('refreshCalData failed:',e); }
+  try{ startRealtimeSync(); }catch(e){ console.error('startRealtimeSync failed:',e); }
+  // Always render UI even if Firebase failed
+  try{ updateTrackerUI(); }catch(e){}
+  try{ renderWeeklyGrid(); }catch(e){}
 }
 
 </script>
