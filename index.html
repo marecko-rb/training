@@ -4,19 +4,36 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Beach Fit — Redondo Beach</title>
-<!-- Firebase compat SDK (works without type=module) -->
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<!-- Firebase compat SDK -->
 <script>
-  firebase.initializeApp({
-    apiKey: "AIzaSyBfZBdXirT0xIiSLfQ6VNeegB_pneOwrx4",
-    authDomain: "beachfit-app.firebaseapp.com",
-    databaseURL: "https://beachfit-app-default-rtdb.firebaseio.com",
-    projectId: "beachfit-app",
-    storageBucket: "beachfit-app.firebasestorage.app",
-    messagingSenderId: "918105846256",
-    appId: "1:918105846256:web:e771e8812e3e7bfe47ed35"
-  });
+// Load Firebase safely — if it fails, app still works (local only)
+window._firebaseLoadError = false;
+</script>
+<script 
+  src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"
+  onerror="window._firebaseLoadError=true;console.warn('Firebase app SDK failed to load');">
+</script>
+<script 
+  src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"
+  onerror="window._firebaseLoadError=true;console.warn('Firebase DB SDK failed to load');">
+</script>
+<script>
+  if(typeof firebase !== 'undefined' && !window._firebaseLoadError){
+    try{
+      firebase.initializeApp({
+        apiKey: "AIzaSyBfZBdXirT0xIiSLfQ6VNeegB_pneOwrx4",
+        authDomain: "beachfit-app.firebaseapp.com",
+        databaseURL: "https://beachfit-app-default-rtdb.firebaseio.com",
+        projectId: "beachfit-app",
+        storageBucket: "beachfit-app.firebasestorage.app",
+        messagingSenderId: "918105846256",
+        appId: "1:918105846256:web:e771e8812e3e7bfe47ed35"
+      });
+      window._firebaseReady = true;
+    }catch(e){ window._firebaseReady=false; console.warn('Firebase init failed:',e); }
+  } else {
+    window._firebaseReady = false;
+  }
 </script>
 <!-- Block all search engines, crawlers, and AI bots -->
 <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex, nocache">
@@ -239,7 +256,7 @@
 <body>
 
 <!-- Password Gate -->
-<div id="gate" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--sand);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;">
+<div id="gate" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--sand);flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;">
   <div style="text-align:center;margin-bottom:32px;">
     <div style="font-size:48px;margin-bottom:12px;">🏖️</div>
     <div style="font-family:'Bebas Neue',sans-serif;font-size:52px;color:var(--deep);line-height:.9;letter-spacing:2px;">BEACH<span style="color:var(--wave);">FIT</span></div>
@@ -987,18 +1004,16 @@ const TARGETS={
 let db=null, ref, set, onValue, get;
 
 async function initFirebase(){
+  if(!window._firebaseReady){
+    console.warn('Firebase not ready — running locally');
+    db=null; return;
+  }
   try{
-    if(typeof firebase==='undefined'){ throw new Error('Firebase SDK not loaded'); }
-    if(location.protocol==='file:'){
-      console.warn('Running as local file — Firebase requires HTTPS. Deploy to GitHub Pages for sync.');
-      setSyncStatus('error');
-      db=null; return;
-    }
     db = firebase.database();
     console.log('Firebase connected ✓');
   }catch(e){
-    console.warn('Firebase unavailable:', e.message);
-    db = null;
+    console.warn('Firebase db failed:', e.message);
+    db=null;
   }
 }
 
@@ -2094,9 +2109,9 @@ async function init(){
   try{ renderWeeklyGrid(); }catch(e){}
 }
 
-</script>
-<script>
-// ── Password gate (separate non-module script — global scope) ──
+
+
+// ── Password gate ──────────────────────────────────────────
 const PASS_KEY='bf_auth_ok';
 const PW_HASH='91f2af590bbe6eb928127abec65d29ce5fe0b78efccd49d9738805ca9e8646d1';
 
@@ -2124,12 +2139,16 @@ function unlockApp(){
   init();
 }
 
-if(localStorage.getItem(PASS_KEY)==='1'){
-  unlockApp();
-} else {
-  document.getElementById('gate').style.display='flex';
-  setTimeout(()=>{ const i=document.getElementById('gate-input'); if(i) i.focus(); },150);
-}
+// Run after DOM is ready
+window.addEventListener('DOMContentLoaded', function(){
+  if(localStorage.getItem(PASS_KEY)==='1'){
+    unlockApp();
+  } else {
+    document.getElementById('gate').style.display='flex';
+    setTimeout(()=>{ const i=document.getElementById('gate-input'); if(i) i.focus(); },100);
+  }
+});
+
 </script>
 </div><!-- #app -->
 </body>
