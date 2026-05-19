@@ -253,6 +253,18 @@ window._firebaseLoadError = false;
   .food-entry-cal{font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--ocean);min-width:46px;text-align:right;}
   .food-del-btn{background:none;border:none;cursor:pointer;color:#ddd;font-size:16px;padding:2px 4px;transition:color .15s;}
   .food-del-btn:hover{color:var(--coral);}
+  .food-edit-btn{background:none;border:none;cursor:pointer;color:#ddd;font-size:14px;padding:2px 4px;transition:color .15s;}
+  .food-edit-btn:hover{color:var(--ocean);}
+  .food-entry-actions{display:flex;align-items:center;gap:2px;}
+  /* Edit modal */
+  .edit-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:flex-end;justify-content:center;backdrop-filter:blur(3px);}
+  .edit-modal-box{background:white;border-radius:24px 24px 0 0;width:100%;max-width:520px;padding:0 0 32px;animation:slideUp .25s ease;}
+  .edit-modal-header{padding:18px 20px 14px;background:var(--ocean);border-radius:24px 24px 0 0;display:flex;align-items:center;justify-content:space-between;}
+  .edit-modal-title{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1px;color:white;}
+  .edit-modal-close{background:rgba(255,255,255,.25);border:none;color:white;font-size:18px;border-radius:50%;width:32px;height:32px;cursor:pointer;}
+  .edit-modal-body{padding:20px;}
+  .edit-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr;gap:8px;margin-bottom:16px;}
+  .edit-save-btn{display:block;width:100%;padding:14px;background:var(--ocean);color:white;border:none;border-radius:12px;font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1px;cursor:pointer;}
 </style>
 </head>
 <body>
@@ -532,6 +544,26 @@ window._firebaseLoadError = false;
       </details>
     </div>
     <div class="food-log-card"><h3>📋 Today's Log</h3><div id="food-log-list"><p class="food-log-empty">Nothing logged yet — add your first meal! 🥗</p></div></div>
+
+    <!-- Edit food modal -->
+    <div class="edit-modal-overlay" id="edit-food-overlay" onclick="closeEditFood(event)">
+      <div class="edit-modal-box">
+        <div class="edit-modal-header">
+          <div class="edit-modal-title">Edit Food</div>
+          <button class="edit-modal-close" onclick="closeEditFoodBtn()">✕</button>
+        </div>
+        <div class="edit-modal-body">
+          <div class="edit-grid">
+            <div class="food-input-group"><label class="food-input-label">Name</label><input class="food-input" id="edit-name" type="text"/></div>
+            <div class="food-input-group"><label class="food-input-label">Cal</label><input class="food-input" id="edit-cal" type="number" min="0"/></div>
+            <div class="food-input-group"><label class="food-input-label">P (g)</label><input class="food-input" id="edit-p" type="number" min="0"/></div>
+            <div class="food-input-group"><label class="food-input-label">C (g)</label><input class="food-input" id="edit-c" type="number" min="0"/></div>
+            <div class="food-input-group"><label class="food-input-label">F (g)</label><input class="food-input" id="edit-f" type="number" min="0"/></div>
+          </div>
+          <button class="edit-save-btn" onclick="saveEditFood()">💾 Save Changes</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Drinks Tracker -->
     <div class="drinks-card">
@@ -1002,6 +1034,45 @@ const TARGETS={
   w:{cal:1400,p:125,c:125,f:47,label:'1,400 cal · Fat loss',color:'#E8715A'}
 };
 
+// ── Custom foods (user-created, per person) ──────────────
+let customFoods={h:[],w:[]};
+
+async function loadCustomFoods(){
+  for(const who of ['h','w']){
+    try{
+      const local=localStorage.getItem('custom_foods_'+who);
+      if(local) customFoods[who]=JSON.parse(local);
+    }catch(e){}
+    if(db){
+      try{
+        const snap=await firebase.database().ref('customFoods/'+who).once('value');
+        if(snap.exists()){
+          const raw=snap.val();
+          const arr=Array.isArray(raw)?raw:Object.values(raw).filter(Boolean);
+          if(arr.length>0){
+            customFoods[who]=arr;
+            localStorage.setItem('custom_foods_'+who,JSON.stringify(arr));
+          }
+        }
+      }catch(e){}
+    }
+  }
+}
+
+async function saveCustomFood(who,food){
+  customFoods[who]=customFoods[who].filter(f=>f.name.toLowerCase()!==food.name.toLowerCase());
+  customFoods[who].unshift(food); // most recent first
+  if(customFoods[who].length>50) customFoods[who]=customFoods[who].slice(0,50);
+  localStorage.setItem('custom_foods_'+who,JSON.stringify(customFoods[who]));
+  if(db){
+    try{ await firebase.database().ref('customFoods/'+who).set(customFoods[who]); }catch(e){}
+  }
+}
+
+function getCustomFoodsForWho(who){
+  return (customFoods[who]||[]).map(f=>({...f,cat:'My Foods'}));
+}
+
 // ── Firebase — uses global SDK loaded via <script> tags in <head> ──
 let db=null, ref, set, onValue, get;
 
@@ -1229,12 +1300,18 @@ function purgeTombstones(){
 
 function updateTrackerUI(){
   try{
-    document.getElementById('count-h').textContent=shared.h.workouts||0;
-  document.getElementById('count-w').textContent=shared.w.workouts||0;
+    // Derive counts from history so deletes are reflected immediately
+    const _now=new Date();
+    const _mo=_now.getMonth(),_yr=_now.getFullYear();
+    const _cH=(shared.history||[]).filter(e=>{if(e.who!=='h'||!e.date)return false;const d=new Date(e.date);return d.getMonth()===_mo&&d.getFullYear()===_yr;}).length;
+    const _cW=(shared.history||[]).filter(e=>{if(e.who!=='w'||!e.date)return false;const d=new Date(e.date);return d.getMonth()===_mo&&d.getFullYear()===_yr;}).length;
+    document.getElementById('count-h').textContent=_cH;
+    document.getElementById('count-w').textContent=_cW;
+    shared.h.workouts=_cH; shared.w.workouts=_cW;
   updateBalance('h',shared.h.balance||0);
   updateBalance('w',shared.w.balance||0);
-  document.getElementById('card-h').classList.toggle('winning',(shared.h.workouts||0)>(shared.w.workouts||0));
-  document.getElementById('card-w').classList.toggle('winning',(shared.w.workouts||0)>(shared.h.workouts||0));
+  document.getElementById('card-h').classList.toggle('winning',_cH>_cW);
+  document.getElementById('card-w').classList.toggle('winning',_cW>_cH);
   // Weekly pot = total penalties potentially in play this week
   const{mon:wMon}=getWeekBounds();
   const wToday=new Date();wToday.setHours(23,59,59,0);
@@ -1279,7 +1356,7 @@ function updateBalance(who,val){
   const missed=Math.max(0,target-done);
   if(done>=target){el.className='balance-tag balance-pos';el.textContent='Week goal hit! 🎉';}
   else if(maxPossible<target){el.className='balance-tag balance-neg';el.textContent='-$'+(missed*20)+' this week';}
-  else{el.className='balance-tag balance-zero';el.textContent=(target-done)+' more to go';}
+  else{el.className='balance-tag balance-zero';el.textContent=done+'/5 this week';}
 }
 
 // ── Calorie tracker ───────────────────────────────────────
@@ -1339,7 +1416,7 @@ function renderCalTracker(){
   }else{rs.style.display='none';}
   const logEl=document.getElementById('food-log-list');
   if(!calEntries.length){logEl.innerHTML='<p class="food-log-empty">Nothing logged yet — add your first meal! 🥗</p>';}
-  else{logEl.innerHTML=calEntries.map((e,i)=>`<div class="food-entry"><div class="food-entry-name">${e.name}</div><div class="food-entry-macros"><span>P:${e.p}g</span><span>C:${e.c}g</span><span>F:${e.f}g</span></div><div class="food-entry-cal">${e.cal}</div><button class="food-del-btn" onclick="deleteFood(${i})">✕</button></div>`).join('');}
+  else{logEl.innerHTML=calEntries.map((e,i)=>`<div class="food-entry"><div class="food-entry-name">${e.name}</div><div class="food-entry-macros"><span>P:${e.p}g</span><span>C:${e.c}g</span><span>F:${e.f}g</span></div><div class="food-entry-cal">${e.cal}</div><div class="food-entry-actions"><button class="food-edit-btn" onclick="openEditFood(${i})" title="Edit">✏️</button><button class="food-del-btn" onclick="deleteFood(${i})" title="Delete">✕</button></div></div>`).join('');}
 }
 
 // ── Dropdown ──────────────────────────────────────────────
@@ -1347,15 +1424,47 @@ function openDropdown(){filterFoodList();}
 function filterFoodList(){
   const q=(document.getElementById('food-search').value||'').toLowerCase().trim();
   const dd=document.getElementById('food-dropdown');dd.style.display='block';
-  const items=q?FOOD_DB.filter(f=>f.name.toLowerCase().includes(q)||f.cat.toLowerCase().includes(q)):FOOD_DB;
+
+  // Merge FOOD_DB with user's custom foods (custom shown first)
+  const myFoods=getCustomFoodsForWho(calWho);
+  const allFoods=[...myFoods,...FOOD_DB];
+
+  const items=q
+    ? allFoods.filter(f=>f.name.toLowerCase().includes(q)||f.cat.toLowerCase().includes(q))
+    : allFoods;
+
   if(!items.length){dd.innerHTML='<div class="dropdown-empty">No match — use "Enter manually" below</div>';return;}
-  const grouped={};items.forEach(f=>{if(!grouped[f.cat])grouped[f.cat]=[];grouped[f.cat].push(f);});
+
+  const grouped={};
+  items.forEach(f=>{if(!grouped[f.cat])grouped[f.cat]=[];grouped[f.cat].push(f);});
+
+  // Always show My Foods category first
+  const orderedCats=Object.keys(grouped).sort((a,b)=>a==='My Foods'?-1:b==='My Foods'?1:0);
+
   let html='';
-  Object.entries(grouped).forEach(([cat,foods])=>{
-    html+=`<div class="dropdown-cat">${cat}</div>`;
-    foods.forEach(f=>{const idx=FOOD_DB.indexOf(f);html+=`<div class="dropdown-item" onclick="selectFood(${idx})"><div class="dropdown-item-name">${f.name}</div><div class="dropdown-item-sub">P${f.p} C${f.c} F${f.f}</div><div class="dropdown-item-cal">${f.cal}</div></div>`;});
+  orderedCats.forEach(cat=>{
+    html+=`<div class="dropdown-cat">${cat==='My Foods'?'⭐ My Foods':cat}</div>`;
+    grouped[cat].forEach(f=>{
+      const dbIdx=FOOD_DB.indexOf(f);
+      if(dbIdx>=0){
+        // From FOOD_DB — use index-based selection
+        html+=`<div class="dropdown-item" onclick="selectFood(${dbIdx})"><div class="dropdown-item-name">${f.name}</div><div class="dropdown-item-sub">P${f.p} C${f.c} F${f.f}</div><div class="dropdown-item-cal">${f.cal}</div></div>`;
+      } else {
+        // Custom food — use name-based selection
+        const safe=JSON.stringify(f).replace(/'/g,"\'");
+        html+=`<div class="dropdown-item" onclick="selectCustomFood(${safe})"><div class="dropdown-item-name">${f.name} <span style="font-size:10px;color:#bbb;">custom</span></div><div class="dropdown-item-sub">P${f.p} C${f.c} F${f.f}</div><div class="dropdown-item-cal">${f.cal}</div></div>`;
+      }
+    });
   });
   dd.innerHTML=html;
+}
+
+function selectCustomFood(food){
+  selectedFood=food;
+  document.getElementById('food-search').value=food.name;
+  document.getElementById('food-dropdown').style.display='none';
+  document.getElementById('food-qty').value=1;
+  updatePreview();
 }
 function selectFood(idx){
   selectedFood=FOOD_DB[idx];
@@ -1404,13 +1513,53 @@ async function addFood(){
   const p=parseFloat(document.getElementById('fi-p').value)||0;
   const c=parseFloat(document.getElementById('fi-c').value)||0;
   const f=parseFloat(document.getElementById('fi-f').value)||0;
-  calEntries.push({name,cal,p,c,f});
+  const entry={name,cal,p,c,f};
+  calEntries.push(entry);
   await saveCalEntries(calWho,calDateOffset,calEntries);
+  // Save to custom foods so it appears in dropdown next time
+  await saveCustomFood(calWho,{name,cal,p,c,f,cat:'My Foods'});
   renderCalTracker();
   ['fi-name','fi-cal','fi-p','fi-c','fi-f'].forEach(id=>document.getElementById(id).value='');
 }
 async function deleteFood(idx){
   calEntries.splice(idx,1);
+  await saveCalEntries(calWho,calDateOffset,calEntries);
+  renderCalTracker();
+}
+
+let editFoodIdx=-1;
+
+function openEditFood(idx){
+  editFoodIdx=idx;
+  const e=calEntries[idx];
+  document.getElementById('edit-name').value=e.name||'';
+  document.getElementById('edit-cal').value=e.cal||0;
+  document.getElementById('edit-p').value=e.p||0;
+  document.getElementById('edit-c').value=e.c||0;
+  document.getElementById('edit-f').value=e.f||0;
+  document.getElementById('edit-food-overlay').style.display='flex';
+  document.body.style.overflow='hidden';
+}
+
+function closeEditFoodBtn(){
+  document.getElementById('edit-food-overlay').style.display='none';
+  document.body.style.overflow='';
+}
+
+function closeEditFood(e){
+  if(e.target===document.getElementById('edit-food-overlay')) closeEditFoodBtn();
+}
+
+async function saveEditFood(){
+  if(editFoodIdx<0||editFoodIdx>=calEntries.length) return;
+  calEntries[editFoodIdx]={
+    name: document.getElementById('edit-name').value.trim()||'Food',
+    cal:  parseInt(document.getElementById('edit-cal').value)||0,
+    p:    parseFloat(document.getElementById('edit-p').value)||0,
+    c:    parseFloat(document.getElementById('edit-c').value)||0,
+    f:    parseFloat(document.getElementById('edit-f').value)||0,
+  };
+  closeEditFoodBtn();
   await saveCalEntries(calWho,calDateOffset,calEntries);
   renderCalTracker();
 }
@@ -2171,9 +2320,9 @@ async function init(){
   try{ setSyncStatus('syncing'); }catch(e){}
   try{ await initFirebase(); }catch(e){ console.error('initFirebase failed:',e); db=null; }
   try{ await loadShared(); }catch(e){ console.error('loadShared failed:',e); }
+  try{ await loadCustomFoods(); }catch(e){ console.error('loadCustomFoods failed:',e); }
   try{ await refreshCalData(); }catch(e){ console.error('refreshCalData failed:',e); }
   try{ startRealtimeSync(); }catch(e){ console.error('startRealtimeSync failed:',e); }
-  // Always render UI even if Firebase failed
   try{ updateTrackerUI(); }catch(e){}
   try{ renderWeeklyGrid(); }catch(e){}
 }
