@@ -521,9 +521,7 @@ window._firebaseLoadError = false;
     <div class="add-food-card">
       <h3>➕ Add Food</h3>
       <div id="recent-section" style="margin-bottom:14px;display:none;"><div class="food-input-label" style="margin-bottom:6px;">⚡ Recent</div><div class="food-quick-btns" id="recent-btns"></div></div>
-      <!-- Debug panel - remove after fixing -->
-      <div id="debug-panel" style="background:#1a1a1a;color:#00ff00;font-size:11px;font-family:monospace;padding:10px;border-radius:8px;margin-bottom:10px;display:none;max-height:150px;overflow-y:auto;white-space:pre-wrap;"></div>
-      <button onclick="toggleDebug()" style="font-size:10px;color:#aaa;background:none;border:1px solid #ddd;border-radius:8px;padding:4px 8px;margin-bottom:10px;cursor:pointer;">🔍 Show Debug</button>
+
       <div class="food-search-wrap">
         <div class="food-search-row">
           <div style="position:relative;flex:1;"><input class="food-input" id="food-search" placeholder="🔍 Search 110+ foods…" type="text" oninput="filterFoodList()" onfocus="openDropdown()" autocomplete="off"/><div id="food-dropdown" class="food-dropdown" style="display:none;"></div></div>
@@ -1185,8 +1183,7 @@ async function loadRecents(who){
       const snap=await firebase.database().ref('recents/'+who).once('value');
       if(snap.exists()){
         const val=snap.val();
-        dbg('loadRecents Firebase('+who+'): '+JSON.stringify(val).slice(0,150));
-        return val;
+              return val;
       }
     }catch(e){}
   }
@@ -1194,8 +1191,7 @@ async function loadRecents(who){
     const l=localStorage.getItem('recents_'+who);
     if(l){
       const parsed=JSON.parse(l);
-      dbg('loadRecents localStorage('+who+'): '+JSON.stringify(parsed).slice(0,150));
-      return parsed;
+          return parsed;
     }
   }catch(e){}
   return [];
@@ -1425,7 +1421,6 @@ function renderCalTracker(){
   document.getElementById('cal-target-note').textContent='Target: '+t.label;
   renderDrinks();
   const rs=document.getElementById('recent-section'), rb=document.getElementById('recent-btns');
-  dbg('renderCalTracker — calRecents ('+calRecents.length+'): '+JSON.stringify(calRecents).slice(0,200));
   if(calRecents.length>0){
     rs.style.display='block';
     rb.innerHTML=calRecents.map((r,i)=>{
@@ -1441,24 +1436,25 @@ function renderCalTracker(){
 
 // ── Dropdown ──────────────────────────────────────────────
 function openDropdown(){filterFoodList();}
+// Holds the current custom-food list for index-based dropdown clicks
+let _customFoodsCache=[];
+
 function filterFoodList(){
   const q=(document.getElementById('food-search').value||'').toLowerCase().trim();
   const dd=document.getElementById('food-dropdown');dd.style.display='block';
 
-  // Merge FOOD_DB with user's custom foods (custom shown first)
   const myFoods=getCustomFoodsForWho(calWho);
-  const allFoods=[...myFoods,...FOOD_DB];
+  _customFoodsCache=myFoods.slice(); // cache for click handlers
 
+  const allFoods=[...myFoods,...FOOD_DB];
   const items=q
-    ? allFoods.filter(f=>f.name.toLowerCase().includes(q)||f.cat.toLowerCase().includes(q))
+    ? allFoods.filter(f=>f.name.toLowerCase().includes(q)||(f.cat||'').toLowerCase().includes(q))
     : allFoods;
 
   if(!items.length){dd.innerHTML='<div class="dropdown-empty">No match — use "Enter manually" below</div>';return;}
 
   const grouped={};
   items.forEach(f=>{if(!grouped[f.cat])grouped[f.cat]=[];grouped[f.cat].push(f);});
-
-  // Always show My Foods category first
   const orderedCats=Object.keys(grouped).sort((a,b)=>a==='My Foods'?-1:b==='My Foods'?1:0);
 
   let html='';
@@ -1467,19 +1463,29 @@ function filterFoodList(){
     grouped[cat].forEach(f=>{
       const dbIdx=FOOD_DB.indexOf(f);
       if(dbIdx>=0){
-        // From FOOD_DB — use index-based selection
         html+=`<div class="dropdown-item" onclick="selectFood(${dbIdx})"><div class="dropdown-item-name">${f.name}</div><div class="dropdown-item-sub">P${f.p} C${f.c} F${f.f}</div><div class="dropdown-item-cal">${f.cal}</div></div>`;
       } else {
-        // Custom food — use name-based selection
-        const safe=JSON.stringify(f).replace(/'/g,"\'");
-        html+=`<div class="dropdown-item" onclick="selectCustomFood(${safe})"><div class="dropdown-item-name">${f.name} <span style="font-size:10px;color:#bbb;">custom</span></div><div class="dropdown-item-sub">P${f.p} C${f.c} F${f.f}</div><div class="dropdown-item-cal">${f.cal}</div></div>`;
+        // Custom food — find its index in cache for safe onclick
+        const customIdx=_customFoodsCache.findIndex(cf=>cf.name===f.name);
+        html+=`<div class="dropdown-item" onclick="selectCustomFoodByIdx(${customIdx})"><div class="dropdown-item-name">${f.name} <span style="font-size:10px;color:#bbb;">custom</span></div><div class="dropdown-item-sub">P${f.p} C${f.c} F${f.f}</div><div class="dropdown-item-cal">${f.cal}</div></div>`;
       }
     });
   });
   dd.innerHTML=html;
 }
 
+function selectCustomFoodByIdx(idx){
+  const food=_customFoodsCache[idx];
+  if(!food){ console.warn('Custom food not found at idx',idx); return; }
+  selectedFood=food;
+  document.getElementById('food-search').value=food.name;
+  document.getElementById('food-dropdown').style.display='none';
+  document.getElementById('food-qty').value=1;
+  updatePreview();
+}
+
 function selectCustomFood(food){
+  // Legacy — kept for backward compat
   selectedFood=food;
   document.getElementById('food-search').value=food.name;
   document.getElementById('food-dropdown').style.display='none';
@@ -1531,21 +1537,18 @@ async function addRecentFood(name){
 }
 
 async function addRecentByIndex(idx){
-  dbg('addRecentByIndex('+idx+') — calRecents: '+JSON.stringify(calRecents).slice(0,200));
   const r=calRecents[idx];
-  dbg('entry r: '+JSON.stringify(r));
-  if(!r){ dbg('ERROR: no entry at idx '+idx); return; }
+  if(!r) return;
   // Handle both object {name,cal,p,c,f} and legacy string format
   let entry;
   if(typeof r==='string'){
     // Legacy: look up by name
     const food=FOOD_DB.find(f=>f.name===r)||getCustomFoodsForWho(calWho).find(f=>f.name===r);
-    if(!food){ dbg('ERROR: legacy string not found: '+r); return; }
+    if(!food) return;
     entry={name:food.name,cal:food.cal,p:food.p,c:food.c,f:food.f};
   } else {
     entry={name:r.name,cal:r.cal||0,p:r.p||0,c:r.c||0,f:r.f||0};
   }
-  dbg('Adding: '+JSON.stringify(entry));
   calEntries.push(entry);
   await saveCalEntries(calWho,calDateOffset,calEntries);
   calRecents.splice(idx,1);
