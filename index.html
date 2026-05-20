@@ -1409,7 +1409,9 @@ function renderCalTracker(){
   if(calRecents.length>0){
     rs.style.display='block';
     rb.innerHTML=calRecents.map(name=>{
-      const food=FOOD_DB.find(f=>f.name===name);if(!food)return'';
+      // Search both FOOD_DB and custom foods
+      const food=FOOD_DB.find(f=>f.name===name)||getCustomFoodsForWho(calWho).find(f=>f.name===name);
+      if(!food)return''; // entry no longer exists
       const safe=name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
       return`<button class="quick-food-btn" onclick="addRecentFood('${safe}')">⚡ ${name}</button>`;
     }).join('');
@@ -1499,9 +1501,12 @@ async function addSelectedFood(){
   renderCalTracker();
 }
 async function addRecentFood(name){
-  const food=FOOD_DB.find(f=>f.name===name);if(!food)return;
+  // Look up in FOOD_DB first, then custom foods
+  const food=FOOD_DB.find(f=>f.name===name)||getCustomFoodsForWho(calWho).find(f=>f.name===name);
+  if(!food){ console.warn('Recent food not found:',name); return; }
   calEntries.push({name:food.name,cal:food.cal,p:food.p,c:food.c,f:food.f});
   await saveCalEntries(calWho,calDateOffset,calEntries);
+  // Bump to top of recents
   const ri=calRecents.indexOf(name);if(ri!==-1)calRecents.splice(ri,1);
   calRecents.unshift(name);if(calRecents.length>8)calRecents.pop();
   await saveRecents(calWho,calRecents);
