@@ -1408,13 +1408,11 @@ function renderCalTracker(){
   const rs=document.getElementById('recent-section'), rb=document.getElementById('recent-btns');
   if(calRecents.length>0){
     rs.style.display='block';
-    rb.innerHTML=calRecents.map(name=>{
-      // Search both FOOD_DB and custom foods
-      const food=FOOD_DB.find(f=>f.name===name)||getCustomFoodsForWho(calWho).find(f=>f.name===name);
-      if(!food)return''; // entry no longer exists
-      const safe=name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-      return`<button class="quick-food-btn" onclick="addRecentFood('${safe}')">⚡ ${name}</button>`;
-    }).join('');
+    rb.innerHTML=calRecents.map((r,i)=>{
+      const name=r.name||r; // support both object and legacy string format
+      if(!name)return'';
+      return`<button class="quick-food-btn" onclick="addRecentByIndex(${i})">⚡ ${name}</button>`;
+    }).filter(Boolean).join('');
   }else{rs.style.display='none';}
   const logEl=document.getElementById('food-log-list');
   if(!calEntries.length){logEl.innerHTML='<p class="food-log-empty">Nothing logged yet — add your first meal! 🥗</p>';}
@@ -1492,7 +1490,10 @@ async function addSelectedFood(){
   calEntries.push(entry);
   await saveCalEntries(calWho,calDateOffset,calEntries);
   const ri=calRecents.indexOf(selectedFood.name);if(ri!==-1)calRecents.splice(ri,1);
-  calRecents.unshift(selectedFood.name);if(calRecents.length>8)calRecents.pop();
+  // Store full food object so recents work without lookup
+  const recentObj={name:selectedFood.name,cal:Math.round(selectedFood.cal*qty),p:Math.round(selectedFood.p*qty),c:Math.round(selectedFood.c*qty),f:Math.round(selectedFood.f*qty)};
+  calRecents=calRecents.filter(r=>(r.name||r)!==selectedFood.name);
+  calRecents.unshift(recentObj);if(calRecents.length>8)calRecents.pop();
   await saveRecents(calWho,calRecents);
   selectedFood=null;
   document.getElementById('food-search').value='';
@@ -1501,14 +1502,26 @@ async function addSelectedFood(){
   renderCalTracker();
 }
 async function addRecentFood(name){
-  // Look up in FOOD_DB first, then custom foods
+  // Legacy string lookup fallback
   const food=FOOD_DB.find(f=>f.name===name)||getCustomFoodsForWho(calWho).find(f=>f.name===name);
   if(!food){ console.warn('Recent food not found:',name); return; }
   calEntries.push({name:food.name,cal:food.cal,p:food.p,c:food.c,f:food.f});
   await saveCalEntries(calWho,calDateOffset,calEntries);
+  renderCalTracker();
+}
+
+async function addRecentByIndex(idx){
+  // Uses stored food object — no lookup needed, works for custom foods too
+  const r=calRecents[idx];
+  if(!r) return;
+  const entry=r.name?{name:r.name,cal:r.cal||0,p:r.p||0,c:r.c||0,f:r.f||0}:null;
+  if(!entry) return;
+  calEntries.push(entry);
+  await saveCalEntries(calWho,calDateOffset,calEntries);
   // Bump to top of recents
-  const ri=calRecents.indexOf(name);if(ri!==-1)calRecents.splice(ri,1);
-  calRecents.unshift(name);if(calRecents.length>8)calRecents.pop();
+  calRecents.splice(idx,1);
+  calRecents.unshift(entry);
+  if(calRecents.length>8)calRecents.pop();
   await saveRecents(calWho,calRecents);
   renderCalTracker();
 }
@@ -1523,6 +1536,10 @@ async function addFood(){
   await saveCalEntries(calWho,calDateOffset,calEntries);
   // Save to custom foods so it appears in dropdown next time
   await saveCustomFood(calWho,{name,cal,p,c,f,cat:'My Foods'});
+  // Also add to recents as full object
+  calRecents=calRecents.filter(r=>(r.name||r)!==name);
+  calRecents.unshift({name,cal,p,c,f});if(calRecents.length>8)calRecents.pop();
+  await saveRecents(calWho,calRecents);
   renderCalTracker();
   ['fi-name','fi-cal','fi-p','fi-c','fi-f'].forEach(id=>document.getElementById(id).value='');
 }
