@@ -521,6 +521,9 @@ window._firebaseLoadError = false;
     <div class="add-food-card">
       <h3>➕ Add Food</h3>
       <div id="recent-section" style="margin-bottom:14px;display:none;"><div class="food-input-label" style="margin-bottom:6px;">⚡ Recent</div><div class="food-quick-btns" id="recent-btns"></div></div>
+      <!-- Debug panel - remove after fixing -->
+      <div id="debug-panel" style="background:#1a1a1a;color:#00ff00;font-size:11px;font-family:monospace;padding:10px;border-radius:8px;margin-bottom:10px;display:none;max-height:150px;overflow-y:auto;white-space:pre-wrap;"></div>
+      <button onclick="toggleDebug()" style="font-size:10px;color:#aaa;background:none;border:1px solid #ddd;border-radius:8px;padding:4px 8px;margin-bottom:10px;cursor:pointer;">🔍 Show Debug</button>
       <div class="food-search-wrap">
         <div class="food-search-row">
           <div style="position:relative;flex:1;"><input class="food-input" id="food-search" placeholder="🔍 Search 110+ foods…" type="text" oninput="filterFoodList()" onfocus="openDropdown()" autocomplete="off"/><div id="food-dropdown" class="food-dropdown" style="display:none;"></div></div>
@@ -1177,8 +1180,24 @@ async function saveRecents(who,list){
   if(db){ try{ await firebase.database().ref('recents/'+who).set(list); }catch(e){} }
 }
 async function loadRecents(who){
-  if(db){ try{ const snap=await firebase.database().ref('recents/'+who).once('value'); if(snap.exists()) return snap.val(); }catch(e){} }
-  try{ const l=localStorage.getItem('recents_'+who); if(l) return JSON.parse(l); }catch(e){}
+  if(db){
+    try{
+      const snap=await firebase.database().ref('recents/'+who).once('value');
+      if(snap.exists()){
+        const val=snap.val();
+        dbg('loadRecents Firebase('+who+'): '+JSON.stringify(val).slice(0,150));
+        return val;
+      }
+    }catch(e){}
+  }
+  try{
+    const l=localStorage.getItem('recents_'+who);
+    if(l){
+      const parsed=JSON.parse(l);
+      dbg('loadRecents localStorage('+who+'): '+JSON.stringify(parsed).slice(0,150));
+      return parsed;
+    }
+  }catch(e){}
   return [];
 }
 
@@ -1406,10 +1425,11 @@ function renderCalTracker(){
   document.getElementById('cal-target-note').textContent='Target: '+t.label;
   renderDrinks();
   const rs=document.getElementById('recent-section'), rb=document.getElementById('recent-btns');
+  dbg('renderCalTracker — calRecents ('+calRecents.length+'): '+JSON.stringify(calRecents).slice(0,200));
   if(calRecents.length>0){
     rs.style.display='block';
     rb.innerHTML=calRecents.map((r,i)=>{
-      const name=r.name||r; // support both object and legacy string format
+      const name=r.name||r;
       if(!name)return'';
       return`<button class="quick-food-btn" onclick="addRecentByIndex(${i})">⚡ ${name}</button>`;
     }).filter(Boolean).join('');
@@ -1511,14 +1531,23 @@ async function addRecentFood(name){
 }
 
 async function addRecentByIndex(idx){
-  // Uses stored food object — no lookup needed, works for custom foods too
+  dbg('addRecentByIndex('+idx+') — calRecents: '+JSON.stringify(calRecents).slice(0,200));
   const r=calRecents[idx];
-  if(!r) return;
-  const entry=r.name?{name:r.name,cal:r.cal||0,p:r.p||0,c:r.c||0,f:r.f||0}:null;
-  if(!entry) return;
+  dbg('entry r: '+JSON.stringify(r));
+  if(!r){ dbg('ERROR: no entry at idx '+idx); return; }
+  // Handle both object {name,cal,p,c,f} and legacy string format
+  let entry;
+  if(typeof r==='string'){
+    // Legacy: look up by name
+    const food=FOOD_DB.find(f=>f.name===r)||getCustomFoodsForWho(calWho).find(f=>f.name===r);
+    if(!food){ dbg('ERROR: legacy string not found: '+r); return; }
+    entry={name:food.name,cal:food.cal,p:food.p,c:food.c,f:food.f};
+  } else {
+    entry={name:r.name,cal:r.cal||0,p:r.p||0,c:r.c||0,f:r.f||0};
+  }
+  dbg('Adding: '+JSON.stringify(entry));
   calEntries.push(entry);
   await saveCalEntries(calWho,calDateOffset,calEntries);
-  // Bump to top of recents
   calRecents.splice(idx,1);
   calRecents.unshift(entry);
   if(calRecents.length>8)calRecents.pop();
